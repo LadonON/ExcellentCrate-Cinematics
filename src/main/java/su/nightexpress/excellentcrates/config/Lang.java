@@ -277,20 +277,13 @@ public class Lang implements LangContainer {
 
     public static final TextLocale EDITOR_TITLE_CINEMATIC_LIST     = LangEntry.builder("Editor.Title.Cinematic.List").text(BLACK.wrap("Cinematic Scenes"));
     public static final TextLocale EDITOR_TITLE_CINEMATIC_SETTINGS = LangEntry.builder("Editor.Title.Cinematic.Settings").text(BLACK.wrap("Scene Settings"));
-    public static final TextLocale EDITOR_TITLE_CINEMATIC_FRAMES   = LangEntry.builder("Editor.Title.Cinematic.Frames").text(BLACK.wrap("Scene Timeline"));
-    public static final TextLocale EDITOR_TITLE_CINEMATIC_FRAME    = LangEntry.builder("Editor.Title.Cinematic.Frame").text(BLACK.wrap("Frame Settings"));
-    public static final TextLocale EDITOR_TITLE_CINEMATIC_ADD      = LangEntry.builder("Editor.Title.Cinematic.AddFrame").text(BLACK.wrap("Add Frame"));
 
     public static final MessageLocale CINEMATIC_CAPTURE_TOOL_GIVEN = LangEntry.builder("Cinematic.CaptureTool.Given").chatMessage(
-        SOFT_YELLOW.wrap("Right-click") + " anywhere to set " + SOFT_YELLOW.wrap(GENERIC_TYPE) + " for scene " + SOFT_YELLOW.wrap(GENERIC_NAME) + "."
+        SOFT_YELLOW.wrap("Right-click") + " anywhere to set the stage for scene " + SOFT_YELLOW.wrap(GENERIC_NAME) + "."
     );
 
     public static final MessageLocale CINEMATIC_CAPTURE_TOOL_DONE = LangEntry.builder("Cinematic.CaptureTool.Done").chatMessage(
-        "Set " + SOFT_YELLOW.wrap(GENERIC_TYPE) + " for scene " + SOFT_YELLOW.wrap(GENERIC_NAME) + "."
-    );
-
-    public static final MessageLocale CINEMATIC_PREVIEW_ERROR_UNPLAYABLE = LangEntry.builder("Cinematic.Preview.Error.Unplayable").chatMessage(
-        RED.wrap("This scene has no viewer position or no frames yet.")
+        "Set the stage for scene " + SOFT_YELLOW.wrap(GENERIC_NAME) + "."
     );
 
     @Deprecated

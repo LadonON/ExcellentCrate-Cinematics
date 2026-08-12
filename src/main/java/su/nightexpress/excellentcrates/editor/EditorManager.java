@@ -8,7 +8,6 @@ import su.nightexpress.excellentcrates.crate.cost.Cost;
 import su.nightexpress.excellentcrates.crate.impl.Crate;
 import su.nightexpress.excellentcrates.crate.reward.impl.ItemReward;
 import su.nightexpress.excellentcrates.dialog.DialogRegistry;
-import su.nightexpress.excellentcrates.cinematic.FrameRef;
 import su.nightexpress.excellentcrates.editor.cinematic.*;
 import su.nightexpress.excellentcrates.editor.crate.*;
 import su.nightexpress.excellentcrates.editor.key.KeyListMenu;
@@ -35,11 +34,8 @@ public class EditorManager extends AbstractManager<CratesPlugin> {
     private KeyListMenu    keyListMenu;
     private KeyOptionsMenu keyOptionsMenu;
 
-    private CinematicListMenu      cinematicListMenu;
-    private CinematicOptionsMenu   cinematicOptionsMenu;
-    private CinematicFramesMenu    cinematicFramesMenu;
-    private CinematicFrameTypeMenu cinematicFrameTypeMenu;
-    private CinematicFrameMenu     cinematicFrameMenu;
+    private CinematicListMenu    cinematicListMenu;
+    private CinematicOptionsMenu cinematicOptionsMenu;
 
     public EditorManager(@NotNull CratesPlugin plugin, @NotNull DialogRegistry dialogs) {
         super(plugin);
@@ -64,9 +60,6 @@ public class EditorManager extends AbstractManager<CratesPlugin> {
 
         this.cinematicListMenu = new CinematicListMenu(this.plugin, this.dialogs);
         this.cinematicOptionsMenu = new CinematicOptionsMenu(this.plugin, this.dialogs);
-        this.cinematicFramesMenu = new CinematicFramesMenu(this.plugin);
-        this.cinematicFrameTypeMenu = new CinematicFrameTypeMenu(this.plugin);
-        this.cinematicFrameMenu = new CinematicFrameMenu(this.plugin, this.dialogs);
     }
 
     @Override
@@ -85,9 +78,6 @@ public class EditorManager extends AbstractManager<CratesPlugin> {
 
         if (this.cinematicListMenu != null) this.cinematicListMenu.clear();
         if (this.cinematicOptionsMenu != null) this.cinematicOptionsMenu.clear();
-        if (this.cinematicFramesMenu != null) this.cinematicFramesMenu.clear();
-        if (this.cinematicFrameTypeMenu != null) this.cinematicFrameTypeMenu.clear();
-        if (this.cinematicFrameMenu != null) this.cinematicFrameMenu.clear();
 
         if (this.editorMenu != null) this.editorMenu.clear();
     }
@@ -148,17 +138,5 @@ public class EditorManager extends AbstractManager<CratesPlugin> {
 
     public void openCinematicOptions(@NotNull Player player, @NotNull CinematicProvider provider) {
         this.cinematicOptionsMenu.open(player, provider);
-    }
-
-    public void openCinematicFrames(@NotNull Player player, @NotNull CinematicProvider provider) {
-        this.cinematicFramesMenu.open(player, provider);
-    }
-
-    public void openCinematicFrameTypes(@NotNull Player player, @NotNull CinematicProvider provider) {
-        this.cinematicFrameTypeMenu.open(player, provider);
-    }
-
-    public void openCinematicFrame(@NotNull Player player, @NotNull CinematicProvider provider, int frameIndex) {
-        this.cinematicFrameMenu.open(player, new FrameRef(provider, frameIndex));
     }
 }

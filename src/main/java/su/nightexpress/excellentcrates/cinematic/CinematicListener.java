@@ -13,7 +13,7 @@ import su.nightexpress.excellentcrates.CratesPlugin;
 import su.nightexpress.nightcore.manager.AbstractListener;
 
 /**
- * Wires the capture tool and editor previews into player events.
+ * Wires the capture tool and the camera-lock cleanup into player events.
  */
 public class CinematicListener extends AbstractListener<CratesPlugin> {
 
@@ -32,7 +32,7 @@ public class CinematicListener extends AbstractListener<CratesPlugin> {
     public void onCaptureToolUse(PlayerInteractEvent event) {
         if (event.getHand() != EquipmentSlot.HAND) return;
 
-        // Right-click only, and air counts: a camera position is usually mid-air, nowhere near a
+        // Right-click only, and air counts: a stage position is usually mid-air, nowhere near a
         // block. Ignoring left-clicks also stops the tool being consumed by an accidental swing.
         Action action = event.getAction();
         if (action != Action.RIGHT_CLICK_AIR && action != Action.RIGHT_CLICK_BLOCK) return;
@@ -44,14 +44,12 @@ public class CinematicListener extends AbstractListener<CratesPlugin> {
     }
 
     /**
-     * A preview leaves the player in spectator mode at the scene, so it has to be torn down if they
-     * disconnect mid-playback.
+     * A player who disconnects mid-hand-off must be restored right now, not on the next tick - see
+     * {@link CinematicManager#forceReturn}.
      */
     @EventHandler(priority = EventPriority.NORMAL)
     public void onQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
-        if (this.manager.isPreviewing(player)) {
-            this.manager.stopPreview(player);
-        }
+        this.manager.forceReturn(player);
     }
 }

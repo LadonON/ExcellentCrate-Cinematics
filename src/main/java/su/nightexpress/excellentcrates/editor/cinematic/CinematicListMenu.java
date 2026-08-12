@@ -13,7 +13,6 @@ import su.nightexpress.excellentcrates.config.Lang;
 import su.nightexpress.excellentcrates.dialog.DialogRegistry;
 import su.nightexpress.excellentcrates.dialog.cinematic.CinematicDialogs;
 import su.nightexpress.excellentcrates.opening.cinematic.CinematicProvider;
-import su.nightexpress.excellentcrates.opening.cinematic.scene.CinematicFrame;
 import su.nightexpress.excellentcrates.opening.cinematic.scene.CinematicScene;
 import su.nightexpress.nightcore.locale.LangContainer;
 import su.nightexpress.nightcore.locale.LangEntry;
@@ -49,8 +48,7 @@ public class CinematicListMenu extends LinkedMenu<CratesPlugin, CinematicManager
         .rawName(GENERIC_NAME)
         .appendCurrent("Status", GENERIC_INSPECTION)
         .appendCurrent("ID", GENERIC_ID)
-        .appendCurrent("Frames", GENERIC_AMOUNT)
-        .appendCurrent("Duration", GENERIC_TIME).br()
+        .appendCurrent("Opening", GENERIC_VALUE).br()
         .rawLore(TagWrappers.DARK_GRAY.wrap("Press " + TagWrappers.GOLD.wrap("[" + TagWrappers.KEY.apply("key.drop") + "]") + " to delete.")).br()
         .appendClick("Click to edit")
         .build();
@@ -93,8 +91,7 @@ public class CinematicListMenu extends LinkedMenu<CratesPlugin, CinematicManager
                     .replace(GENERIC_INSPECTION, () -> Lang.inspection(Lang.INSPECTIONS_GENERIC_OVERVIEW, scene.isPlayable()))
                     .replace(GENERIC_NAME, scene::getName)
                     .replace(GENERIC_ID, scene::getId)
-                    .replace(GENERIC_AMOUNT, () -> String.valueOf(scene.countFrames()))
-                    .replace(GENERIC_TIME, () -> CinematicFrame.formatTicks(scene.getTotalDuration()))
+                    .replace(GENERIC_VALUE, () -> scene.hasOpeningId() ? scene.getOpeningId() : "-")
                 );
         });
         autoFill.setItemClick(provider -> (viewer1, event) -> {

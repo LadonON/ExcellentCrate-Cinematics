@@ -9,8 +9,6 @@ import org.jetbrains.annotations.Nullable;
 import su.nightexpress.excellentcrates.CratesPlugin;
 import su.nightexpress.excellentcrates.opening.cinematic.CinematicProvider;
 import su.nightexpress.excellentcrates.opening.cinematic.scene.CinematicScene;
-import su.nightexpress.excellentcrates.opening.cinematic.scene.Easing;
-import su.nightexpress.excellentcrates.opening.cinematic.scene.impl.*;
 import su.nightexpress.excellentcrates.opening.inventory.InventoryProvider;
 import su.nightexpress.excellentcrates.opening.inventory.spinner.SpinMode;
 import su.nightexpress.excellentcrates.opening.inventory.spinner.SpinStep;
@@ -19,9 +17,7 @@ import su.nightexpress.excellentcrates.opening.inventory.spinner.provider.Animat
 import su.nightexpress.excellentcrates.opening.inventory.spinner.provider.RewardProvider;
 import su.nightexpress.excellentcrates.opening.selectable.SelectableProvider;
 import su.nightexpress.excellentcrates.opening.world.provider.SimpleRollProvider;
-import su.nightexpress.excellentcrates.util.pos.WorldPoint;
 import su.nightexpress.nightcore.util.bukkit.NightItem;
-import su.nightexpress.nightcore.util.text.night.wrapper.TagWrappers;
 import su.nightexpress.nightcore.util.random.Rnd;
 import su.nightexpress.nightcore.util.random.WeightedItem;
 
@@ -57,9 +53,10 @@ public class OpeningUtils {
     /**
      * Builds the starter cinematic shipped on first run.
      *
-     * <p>The camera and prop locations are deliberately left unset — they are world-specific and
-     * can only be captured in-game with the editor's capture tool. The frames are pre-filled so an
-     * admin opens the editor to a working timeline to adjust rather than a blank list.
+     * <p>The stage location is deliberately left unset — it is world-specific and can only be
+     * captured in-game with the editor's capture tool. It delegates to {@code simple_roll} by
+     * default, since that provider always exists out of the box and demonstrates the hand-off
+     * immediately once a stage is captured.
      */
     @NotNull
     public static CinematicProvider createCinematicExample(@NotNull CratesPlugin plugin, @NotNull String id) {
@@ -67,15 +64,7 @@ public class OpeningUtils {
         CinematicScene scene = provider.getScene();
 
         scene.setName("Example Cinematic");
-        scene.setRewardOffsetY(1.5D);
-
-        scene.addFrame(new SendTitleFrame(0L, "", TagWrappers.GRAY.wrap("Opening..."), 10, 40, 10));
-        scene.addFrame(new PlaySoundFrame(0L, "minecraft:block.beacon.activate", 1.0F, 1.0F));
-        scene.addFrame(new MoveCameraFrame(60L, WorldPoint.empty(), Easing.EASE_IN_OUT));
-        scene.addFrame(new PropTransformFrame(40L, 0D, 0.5D, 0D, 180F, 0F, 1.25D, Easing.EASE_OUT));
-        scene.addFrame(new ParticleFrame(0L, "minecraft:cloud", 30, 0.4D, 0.4D, 0.4D, 0.05D));
-        scene.addFrame(new SpawnRewardFrame(60L, true));
-        scene.addFrame(new WaitFrame(20L));
+        scene.setOpeningId("simple_roll");
 
         return provider;
     }

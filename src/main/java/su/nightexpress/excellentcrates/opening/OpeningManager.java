@@ -211,4 +211,23 @@ public class OpeningManager extends AbstractManager<CratesPlugin> {
 
         if (instaRoll) opening.instaRoll();
     }
+
+    /**
+     * Replaces whichever opening is currently registered for {@code player} with {@code opening} and
+     * starts it, without touching cost, permission, cooldown or limit checks - those already happened
+     * for whatever triggered the original opening.
+     *
+     * <p>This is how the cinematic opening hands control to a delegate: the delegate needs to be the
+     * <i>registered</i> opening (not just ticked manually) so that GUI-based openings such as the
+     * Inventory type - which look up their own instance via {@link #getOpening(Player)} to route
+     * clicks - keep working normally once control passes to them.
+     *
+     * <p>Uses {@code put} rather than {@code putIfAbsent} because the whole point is to replace the
+     * existing entry.
+     */
+    public void swapOpening(@NotNull Player player, @NotNull Opening opening) {
+        this.openingByPlayerMap.put(player.getUniqueId(), opening);
+
+        opening.start();
+    }
 }

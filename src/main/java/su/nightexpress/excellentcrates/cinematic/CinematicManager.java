@@ -1,7 +1,10 @@
 package su.nightexpress.excellentcrates.cinematic;
 
+import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
-import org.bukkit.Material;
+import org.bukkit.block.Block;
+import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
 import org.bukkit.event.player.PlayerInteractEvent;
@@ -14,16 +17,17 @@ import su.nightexpress.excellentcrates.api.opening.OpeningProvider;
 import su.nightexpress.excellentcrates.config.Config;
 import su.nightexpress.excellentcrates.config.Keys;
 import su.nightexpress.excellentcrates.config.Lang;
+import su.nightexpress.excellentcrates.crate.impl.Crate;
 import su.nightexpress.excellentcrates.dialog.DialogRegistry;
-import su.nightexpress.excellentcrates.dialog.cinematic.*;
-import su.nightexpress.excellentcrates.hooks.impl.NexoHook;
+import su.nightexpress.excellentcrates.dialog.cinematic.CinematicDialogs;
+import su.nightexpress.excellentcrates.dialog.cinematic.SceneCameraHeightDialog;
+import su.nightexpress.excellentcrates.dialog.cinematic.SceneCreationDialog;
+import su.nightexpress.excellentcrates.dialog.cinematic.SceneNameDialog;
+import su.nightexpress.excellentcrates.dialog.cinematic.SceneOpeningDialog;
 import su.nightexpress.excellentcrates.opening.cinematic.CinematicProvider;
-import su.nightexpress.excellentcrates.opening.cinematic.ScenePlayback;
-import su.nightexpress.excellentcrates.opening.cinematic.scene.CinematicFrame;
 import su.nightexpress.excellentcrates.opening.cinematic.scene.CinematicScene;
-import su.nightexpress.excellentcrates.opening.cinematic.scene.impl.MoveCameraFrame;
-import su.nightexpress.excellentcrates.opening.cinematic.scene.impl.TeleportCameraFrame;
 import su.nightexpress.excellentcrates.util.pos.WorldPoint;
+import su.nightexpress.excellentcrates.util.pos.WorldPos;
 import su.nightexpress.nightcore.config.FileConfig;
 import su.nightexpress.nightcore.manager.AbstractManager;
 import su.nightexpress.nightcore.util.FileUtil;
@@ -38,27 +42,22 @@ import java.nio.file.Path;
 import java.util.*;
 
 /**
- * Owns everything about cinematic scenes that is not the playback itself: creating and deleting
- * scene files, handing out and consuming the capture tool, and running editor previews.
+ * Owns everything about cinematic scenes that is not the hand-off itself: creating and deleting
+ * scene files, handing out and consuming the capture tool that sets the stage location, and
+ * finishing the round trip once a delegated opening completes.
  *
  * <p>Scenes are opening providers, so the plugin-wide registry in {@code OpeningManager} remains the
  * single source of truth — this manager only reaches into it rather than keeping a parallel list.
  */
 public class CinematicManager extends AbstractManager<CratesPlugin> {
 
-    /** Item shown by the prop during an editor preview, where there is no crate to borrow from. */
-    private static final Material PREVIEW_PROP_MATERIAL = Material.CHEST;
-
-    /** Sentinel meaning "this capture tool is not aimed at a particular frame". */
-    private static final int NO_FRAME = -1;
-
-    private final DialogRegistry           dialogs;
-    private final Map<UUID, ScenePlayback> previews;
+    private final DialogRegistry             dialogs;
+    private final Map<UUID, PendingReturn>   pendingReturns;
 
     public CinematicManager(@NotNull CratesPlugin plugin, @NotNull DialogRegistry dialogs) {
         super(plugin);
         this.dialogs = dialogs;
-        this.previews = new HashMap<>();
+        this.pendingReturns = new HashMap<>();
     }
 
     @Override
@@ -67,27 +66,33 @@ public class CinematicManager extends AbstractManager<CratesPlugin> {
 
         this.addListener(new CinematicListener(this.plugin, this));
 
-        // Previews run outside the opening system, so they need their own per-tick pump.
-        this.addTask(this::tickPreviews, 1L);
+        // Hand-offs are not driven by the delegate's own tick - see CinematicOpening's class comment
+        // - so this manager needs its own per-tick pump to notice when a delegate finishes and bring
+        // the player back.
+        this.addTask(this::tickReturns, 1L);
     }
 
     @Override
     protected void onShutdown() {
-        this.previews.values().forEach(ScenePlayback::stop);
-        this.previews.clear();
-
-        NexoHook.clear();
+        // Best-effort: a reload or disable must not strand anyone in spectator mode staring at a
+        // marker that is about to vanish out from under them.
+        for (Map.Entry<UUID, PendingReturn> entry : this.pendingReturns.entrySet()) {
+            Player player = Bukkit.getPlayer(entry.getKey());
+            if (player != null) {
+                this.finishReturn(player, entry.getValue());
+            }
+            else if (entry.getValue().cameraMarker().isValid()) {
+                entry.getValue().cameraMarker().remove();
+            }
+        }
+        this.pendingReturns.clear();
     }
 
     private void loadDialogs() {
         this.dialogs.register(CinematicDialogs.SCENE_CREATION, SceneCreationDialog::new);
         this.dialogs.register(CinematicDialogs.SCENE_NAME, SceneNameDialog::new);
-        this.dialogs.register(CinematicDialogs.SCENE_REWARD_OFFSET, SceneRewardOffsetDialog::new);
-        this.dialogs.register(CinematicDialogs.FRAME_DURATION, FrameDurationDialog::new);
-        this.dialogs.register(CinematicDialogs.FRAME_SOUND, FrameSoundDialog::new);
-        this.dialogs.register(CinematicDialogs.FRAME_TITLE, FrameTitleDialog::new);
-        this.dialogs.register(CinematicDialogs.FRAME_PARTICLE, FrameParticleDialog::new);
-        this.dialogs.register(CinematicDialogs.FRAME_TRANSFORM, FrameTransformDialog::new);
+        this.dialogs.register(CinematicDialogs.SCENE_OPENING, () -> new SceneOpeningDialog(this.plugin));
+        this.dialogs.register(CinematicDialogs.SCENE_CAMERA_HEIGHT, SceneCameraHeightDialog::new);
     }
 
     // ------------------------------------------------------------------
@@ -114,6 +119,19 @@ public class CinematicManager extends AbstractManager<CratesPlugin> {
 
     public int countScenes() {
         return this.getScenes().size();
+    }
+
+    /**
+     * @return every opening id a scene may delegate to: every loaded provider except cinematic scenes
+     * themselves, which would recurse.
+     */
+    @NotNull
+    public List<String> getDelegatableOpeningIds() {
+        return this.plugin.getOpeningManager().getProviderByIdMap().values().stream()
+            .filter(provider -> !(provider instanceof CinematicProvider))
+            .map(OpeningProvider::getId)
+            .sorted(String::compareTo)
+            .toList();
     }
 
     /**
@@ -168,35 +186,30 @@ public class CinematicManager extends AbstractManager<CratesPlugin> {
     // ------------------------------------------------------------------
 
     /**
-     * Gives the admin a capture tool aimed at a scene-level position.
+     * Gives the admin a capture tool that writes the current position and facing into the scene's
+     * stage location on right-click, and — if the right-click lands on a block rather than air —
+     * also marks that block as the scene's crate block, so delegates that render on top of a block
+     * (Simple Roll, most notably) have one to render on top of.
      */
-    public void giveCaptureTool(@NotNull Player player, @NotNull CinematicProvider provider, @NotNull CaptureTarget target) {
-        this.giveCaptureTool(player, provider, target, NO_FRAME);
-    }
-
-    /**
-     * Gives the admin a capture tool. The scene, target kind and frame index are stamped onto the
-     * item, so a single tool implementation serves the viewer position, the prop position and every
-     * camera keyframe — one implementation reused three ways, as the design brief asks.
-     */
-    public void giveCaptureTool(@NotNull Player player, @NotNull CinematicProvider provider, @NotNull CaptureTarget target, int frameIndex) {
+    public void giveCaptureTool(@NotNull Player player, @NotNull CinematicProvider provider) {
         ItemStack itemStack = Config.CINEMATIC_CAPTURE_TOOL.get().getItemStack();
 
         PDCUtil.set(itemStack, Keys.captureToolSceneId, provider.getId());
-        PDCUtil.set(itemStack, Keys.captureToolTarget, target.name());
-        PDCUtil.set(itemStack, Keys.captureToolFrameIndex, frameIndex);
 
         Players.addItem(player, itemStack);
 
         Lang.CINEMATIC_CAPTURE_TOOL_GIVEN.message().send(player, replacer -> replacer
-            .replace(Placeholders.GENERIC_TYPE, target.getName())
             .replace(Placeholders.GENERIC_NAME, provider.getScene().getName())
         );
     }
 
     /**
      * Consumes a capture tool right-click, writing the admin's current position and facing into the
-     * scene.
+     * scene's stage — and, if they right-clicked an actual block rather than air, that block into the
+     * scene's crate block too.
+     *
+     * <p>An air click never clears a crate block set by an earlier capture: adjusting exactly where
+     * you stand afterwards shouldn't undo which block the reveal is anchored to.
      *
      * @return {@code true} if the item was a capture tool and the interaction was handled.
      */
@@ -213,101 +226,118 @@ public class CinematicManager extends AbstractManager<CratesPlugin> {
         CinematicProvider provider = this.getScene(sceneId);
         if (provider == null) return true;
 
-        CaptureTarget target = CaptureTarget.byName(PDCUtil.getString(itemStack, Keys.captureToolTarget).orElse(""));
-        int frameIndex = PDCUtil.getInt(itemStack, Keys.captureToolFrameIndex).orElse(NO_FRAME);
+        CinematicScene scene = provider.getScene();
 
-        // The admin's own location already carries the yaw and pitch a camera needs.
-        Location location = player.getLocation();
-        this.applyCapture(provider.getScene(), target, frameIndex, WorldPoint.from(location));
+        // The admin's own location already carries the yaw and pitch the stage teleport should use.
+        scene.setStage(WorldPoint.from(player.getLocation()));
+
+        Block clickedBlock = event.getClickedBlock();
+        if (clickedBlock != null) {
+            scene.setCrateBlock(WorldPos.from(clickedBlock));
+        }
+
         provider.save();
 
         Lang.CINEMATIC_CAPTURE_TOOL_DONE.message().send(player, replacer -> replacer
-            .replace(Placeholders.GENERIC_TYPE, target.getName())
             .replace(Placeholders.GENERIC_NAME, provider.getScene().getName())
         );
 
-        this.reopenAfterCapture(player, provider, target, frameIndex);
+        this.plugin.runTask(task -> this.plugin.getEditorManager().openCinematicOptions(player, provider));
         return true;
     }
 
-    private void applyCapture(@NotNull CinematicScene scene, @NotNull CaptureTarget target, int frameIndex, @NotNull WorldPoint point) {
-        switch (target) {
-            case SCENE_PLAYER -> scene.setPlayerPoint(point);
-            case SCENE_PROP -> scene.setPropPoint(point);
-            case FRAME_CAMERA -> {
-                CinematicFrame frame = scene.getFrame(frameIndex);
-                if (frame instanceof MoveCameraFrame move) {
-                    move.setTarget(point);
-                }
-                else if (frame instanceof TeleportCameraFrame teleport) {
-                    teleport.setTarget(point);
-                }
-            }
-        }
-    }
-
-    /**
-     * Returns the admin to the screen they left, so capturing a position does not cost them their
-     * place in the editor.
-     */
-    private void reopenAfterCapture(@NotNull Player player, @NotNull CinematicProvider provider, @NotNull CaptureTarget target, int frameIndex) {
-        this.plugin.runTask(task -> {
-            if (target == CaptureTarget.FRAME_CAMERA) {
-                this.plugin.getEditorManager().openCinematicFrame(player, provider, frameIndex);
-            }
-            else {
-                this.plugin.getEditorManager().openCinematicOptions(player, provider);
-            }
-        });
-    }
-
     // ------------------------------------------------------------------
-    // Editor preview
+    // Hand-off round trip
     // ------------------------------------------------------------------
 
     /**
-     * Plays a scene for an admin without consuming a key or rolling a reward.
+     * Registers a player as waiting for their delegated opening to finish, so they can be teleported
+     * back once it does.
      *
-     * <p>Uses the same {@link ScenePlayback} the real opening does, so what a builder sees while
-     * iterating is exactly what a player will see.
+     * <p>Called by {@link su.nightexpress.excellentcrates.opening.cinematic.CinematicOpening} right
+     * after it swaps the delegate into place. From this point that opening is dangling — it is no
+     * longer registered anywhere and will never tick again — so this manager, not that object, is
+     * what finishes the round trip.
      *
-     * @return {@code false} if the scene is not playable yet.
+     * @param blockPos     the base crate's block, if the player clicked one, so its hologram can be
+     *                     restored; {@code null} if there was nothing to hide in the first place.
+     * @param cameraMarker the stationary marker locking the player's camera, so it can be removed and
+     *                     the player detached from it once the delegate finishes.
      */
-    public boolean startPreview(@NotNull Player player, @NotNull CinematicProvider provider) {
-        CinematicScene scene = provider.getScene();
-        if (!scene.isPlayable()) return false;
-
-        this.stopPreview(player);
-
-        ScenePlayback playback = new ScenePlayback(this.plugin, player, scene, new ItemStack(PREVIEW_PROP_MATERIAL), null);
-        if (!playback.start()) return false;
-
-        this.previews.put(player.getUniqueId(), playback);
-        return true;
+    public void awaitReturn(@NotNull Player player, @NotNull Location returnLocation, @NotNull GameMode returnGameMode,
+                            @NotNull Crate crate, @Nullable WorldPos blockPos, @NotNull ArmorStand cameraMarker) {
+        this.pendingReturns.put(player.getUniqueId(), new PendingReturn(returnLocation.clone(), returnGameMode, crate, blockPos, cameraMarker));
     }
 
-    public void stopPreview(@NotNull Player player) {
-        ScenePlayback playback = this.previews.remove(player.getUniqueId());
-        if (playback != null) playback.stop();
+    /**
+     * Restores a player who disconnects while their delegated opening is still running.
+     *
+     * <p>Neither the gamemode restore nor the marker removal can wait for the next tick's
+     * {@link #tickReturns()} pass: once a player is offline, {@code setGameMode} can no longer reach
+     * them, and a spectator-mode gamemode left stuck in their saved data would greet them with a
+     * frozen camera on their very next login. This runs during the quit event itself, while they are
+     * still briefly reachable.
+     */
+    public void forceReturn(@NotNull Player player) {
+        PendingReturn pending = this.pendingReturns.remove(player.getUniqueId());
+        if (pending == null) return;
+
+        this.finishReturn(player, pending);
     }
 
-    public boolean isPreviewing(@NotNull Player player) {
-        return this.previews.containsKey(player.getUniqueId());
-    }
+    private void tickReturns() {
+        if (this.pendingReturns.isEmpty()) return;
 
-    private void tickPreviews() {
-        if (this.previews.isEmpty()) return;
-
-        Iterator<Map.Entry<UUID, ScenePlayback>> iterator = this.previews.entrySet().iterator();
+        Iterator<Map.Entry<UUID, PendingReturn>> iterator = this.pendingReturns.entrySet().iterator();
         while (iterator.hasNext()) {
-            ScenePlayback playback = iterator.next().getValue();
+            Map.Entry<UUID, PendingReturn> entry = iterator.next();
+            Player player = Bukkit.getPlayer(entry.getKey());
 
-            playback.tick();
-
-            if (playback.isFinished()) {
-                playback.stop();
+            if (player == null) {
+                // Normally forceReturn already handled this on quit and the entry would be gone
+                // entirely; this is a defensive fallback so a marker can never linger regardless.
+                if (entry.getValue().cameraMarker().isValid()) {
+                    entry.getValue().cameraMarker().remove();
+                }
                 iterator.remove();
+                continue;
             }
+
+            // Still running - the delegate hasn't finished (or been cancelled) yet.
+            if (this.plugin.getOpeningManager().isOpening(player)) continue;
+
+            this.finishReturn(player, entry.getValue());
+            iterator.remove();
         }
     }
+
+    /**
+     * Detaches and removes the camera marker, restores the player's gamemode and position, and
+     * un-hides the base crate's hologram if one was hidden.
+     *
+     * <p>The spectator target is cleared before the marker is removed, not after — detaching from a
+     * marker that already stopped existing can leave the client visually stuck on the dead entity.
+     */
+    private void finishReturn(@NotNull Player player, @NotNull PendingReturn pending) {
+        if (player.getSpectatorTarget() == pending.cameraMarker()) {
+            player.setSpectatorTarget(null);
+        }
+        if (pending.cameraMarker().isValid()) {
+            pending.cameraMarker().remove();
+        }
+
+        player.setGameMode(pending.returnGameMode());
+        player.teleport(pending.returnLocation());
+
+        if (pending.blockPos() != null) {
+            this.plugin.getHologramManager().ifPresent(hologramManager -> hologramManager.enableBlockHologram(pending.crate(), pending.blockPos()));
+        }
+    }
+
+    /**
+     * What a hand-off needs remembered until the delegate finishes: where and in what gamemode to put
+     * the player back, which hologram (if any) to restore, and which marker is locking their camera.
+     */
+    private record PendingReturn(@NotNull Location returnLocation, @NotNull GameMode returnGameMode,
+                                 @NotNull Crate crate, @Nullable WorldPos blockPos, @NotNull ArmorStand cameraMarker) {}
 }

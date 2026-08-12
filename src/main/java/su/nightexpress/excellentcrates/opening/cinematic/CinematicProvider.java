@@ -16,8 +16,7 @@ import java.io.File;
  * Opening provider backing one file under {@code openings/cinematic/}.
  *
  * <p>Registered in {@code ProviderRegistry} exactly like the Inventory, Simple Roll and Selectable
- * providers, so a cinematic scene appears in the crate's "Opening Animation" picker automatically —
- * that dialog lists every loaded provider id and needs no change to gain a fourth type.
+ * providers, so a cinematic scene appears in the crate's "Opening Animation" picker automatically.
  *
  * <p>One provider owns exactly one {@link CinematicScene}, so "scene" and "opening id" are the same
  * thing from an admin's point of view.
@@ -40,8 +39,7 @@ public class CinematicProvider extends AbstractProvider {
 
         // A brand-new file keeps whatever scene the factory pre-seeded (see OpeningUtils) and gets
         // the full key layout written out, so it is obvious what can be hand-edited. Existing files
-        // are only read - never rewritten on load - so frames produced by a newer version survive
-        // being loaded by an older one.
+        // are only read - never rewritten on load.
         if (config.getKeys(false).isEmpty()) {
             this.scene.write(config);
             return;

@@ -110,7 +110,7 @@ public class Config {
     public static final ConfigValue<NightItem> CINEMATIC_CAPTURE_TOOL = ConfigValue.create("Cinematic.CaptureTool",
         CrateUtils.getDefaultCaptureTool(),
         "Sets the Capture Tool item layout.",
-        "The Capture Tool is used by the cinematic editor to store camera and prop positions",
+        "The Capture Tool is used by the cinematic editor to store the stage location",
         "from where you are standing and looking, instead of typing coordinates by hand."
     );
 

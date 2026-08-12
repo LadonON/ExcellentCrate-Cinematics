@@ -124,8 +124,8 @@
             </exclusions>
         </dependency>
 
-        <!-- Tests cover the Bukkit-free core of the cinematic feature (easing curves, frame
-             serialization, timeline ordering), so no server mocking framework is required. -->
+        <!-- Tests cover the Bukkit-free core of the cinematic feature, so no server mocking
+             framework is required. -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>

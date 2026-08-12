@@ -35,6 +35,9 @@ public abstract class AbstractOpening implements Opening {
     protected boolean running;
     protected boolean refundable;
 
+    /** Guards {@link #completeOpening()} so an opening can never pay out twice. */
+    private boolean opened;
+
     public AbstractOpening(@NotNull CratesPlugin plugin, @NotNull Player player, @NotNull CrateSource source, @Nullable Cost cost) {
         this.plugin = plugin;
         this.player = player;
@@ -111,47 +114,77 @@ public abstract class AbstractOpening implements Opening {
         this.plugin.getOpeningManager().removeOpening(this.getPlayer());
 
         if (this.isCompleted()) {
-            this.onComplete();
-
-            CrateUser user = plugin.getUserManager().getOrFetch(player);
-            UserCrateData userData = user.getCrateData(this.crate);
-            GlobalCrateData globalData = plugin.getDataManager().getCrateDataOrCreate(this.crate);
-
-            userData.addOpenings(1);
-            globalData.setLatestOpener(this.player);
-            globalData.setDirty(true);
-
-            this.rewards.forEach(reward -> reward.give(this.player));
-
-            if (crate.isOpeningCooldownEnabled()) {
-                userData.addOpeningStreak(1);
-
-                if (!userData.isOnCooldown() && !crate.hasCooldownBypassPermission(player)) {
-                    userData.setCooldown(crate.getOpeningCooldownTime());
-                }
-            }
-
-            if (crate.hasMilestones()) {
-                userData.addMilestones(1);
-                plugin.getCrateManager().triggerMilestones(player, crate, userData.getMilestone());
-                if (userData.getMilestone() >= crate.getMaxMilestone() && crate.isMilestonesRepeatable()) {
-                    userData.setMilestone(0);
-                }
-            }
-
-            Lang.CRATE_OPEN_RESULT_INFO.message().send(this.player, replacer -> replacer
-                .replace(this.crate.replacePlaceholders())
-                .replace(Placeholders.GENERIC_REWARDS, this.rewards.stream()
-                    .map(reward -> reward.replacePlaceholders().apply(Lang.CRATE_OPEN_RESULT_REWARD.text()))
-                    .collect(Collectors.joining(", "))
-                )
-            );
-
-            List<String> postOpenCommands = Replacer.create().replace(this.crate.replacePlaceholders()).apply(this.crate.getPostOpenCommands());
-            Players.dispatchCommands(this.player, postOpenCommands);
-
-            this.plugin.getUserManager().save(user);
+            this.completeOpening();
         }
+    }
+
+    /**
+     * Performs the crate opening proper: rewards, stats, cooldown, milestones, the result message
+     * and post-open commands.
+     *
+     * <p>Normally reached from {@link #onStop()} when the animation finishes. It is exposed to
+     * subclasses so an animation can decide for itself <i>when</i> the crate opens — the cinematic
+     * opening calls it on its {@code TRIGGER_CRATE_OPEN} frame rather than at the end.
+     *
+     * <p>Idempotent: the first call does the work and every later one is ignored, so an animation
+     * that both triggers early and then stops normally still opens the crate exactly once.
+     *
+     * @return {@code true} if this call is the one that opened the crate.
+     */
+    protected final boolean completeOpening() {
+        if (this.opened) return false;
+        this.opened = true;
+
+        this.onComplete();
+
+        CrateUser user = plugin.getUserManager().getOrFetch(player);
+        UserCrateData userData = user.getCrateData(this.crate);
+        GlobalCrateData globalData = plugin.getDataManager().getCrateDataOrCreate(this.crate);
+
+        userData.addOpenings(1);
+        globalData.setLatestOpener(this.player);
+        globalData.setDirty(true);
+
+        this.rewards.forEach(reward -> reward.give(this.player));
+
+        if (crate.isOpeningCooldownEnabled()) {
+            userData.addOpeningStreak(1);
+
+            if (!userData.isOnCooldown() && !crate.hasCooldownBypassPermission(player)) {
+                userData.setCooldown(crate.getOpeningCooldownTime());
+            }
+        }
+
+        if (crate.hasMilestones()) {
+            userData.addMilestones(1);
+            plugin.getCrateManager().triggerMilestones(player, crate, userData.getMilestone());
+            if (userData.getMilestone() >= crate.getMaxMilestone() && crate.isMilestonesRepeatable()) {
+                userData.setMilestone(0);
+            }
+        }
+
+        Lang.CRATE_OPEN_RESULT_INFO.message().send(this.player, replacer -> replacer
+            .replace(this.crate.replacePlaceholders())
+            .replace(Placeholders.GENERIC_REWARDS, this.rewards.stream()
+                .map(reward -> reward.replacePlaceholders().apply(Lang.CRATE_OPEN_RESULT_REWARD.text()))
+                .collect(Collectors.joining(", "))
+            )
+        );
+
+        List<String> postOpenCommands = Replacer.create().replace(this.crate.replacePlaceholders()).apply(this.crate.getPostOpenCommands());
+        Players.dispatchCommands(this.player, postOpenCommands);
+
+        this.plugin.getUserManager().save(user);
+        return true;
+    }
+
+    /**
+     * @return {@code true} once the crate has actually been opened, i.e. once rewards have been
+     * handed out. Distinct from {@link #isCompleted()}, which asks whether the <i>animation</i> has
+     * run its course.
+     */
+    protected final boolean isOpened() {
+        return this.opened;
     }
 
     @Override

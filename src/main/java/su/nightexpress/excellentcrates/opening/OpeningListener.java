@@ -6,6 +6,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.jetbrains.annotations.NotNull;
 import su.nightexpress.excellentcrates.CratesPlugin;
@@ -25,6 +26,18 @@ public class OpeningListener extends AbstractListener<CratesPlugin> {
     @EventHandler(priority = EventPriority.NORMAL)
     public void onQuit(PlayerQuitEvent event) {
         this.manager.stopOpening(event.getPlayer());
+    }
+
+    /**
+     * Tears the opening down if the player dies mid-animation.
+     *
+     * <p>A cinematic parks its viewer in spectator mode, so this is rare — but an opening that
+     * outlives its player would keep its camera and models in the world with nothing left to drive
+     * them, and would block the player from opening anything else.
+     */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onDeath(PlayerDeathEvent event) {
+        this.manager.stopOpening(event.getEntity());
     }
 
     @EventHandler(priority = EventPriority.NORMAL)
