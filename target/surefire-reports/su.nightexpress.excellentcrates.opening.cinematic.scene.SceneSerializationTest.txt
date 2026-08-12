@@ -1,4 +1,0 @@
--------------------------------------------------------------------------------
-Test set: su.nightexpress.excellentcrates.opening.cinematic.scene.SceneSerializationTest
--------------------------------------------------------------------------------
-Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.132 s -- in su.nightexpress.excellentcrates.opening.cinematic.scene.SceneSerializationTest
