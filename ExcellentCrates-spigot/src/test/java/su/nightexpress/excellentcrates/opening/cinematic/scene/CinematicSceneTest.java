@@ -33,8 +33,6 @@ class CinematicSceneTest {
         scene.setOpeningId("simple_roll");
         scene.setCameraHeight(2.25D);
         scene.setCrateBlock(new WorldPos("world", 10, 63, -20));
-        scene.setModelYaw(135.0D);
-        scene.setStartDelay(40);
         scene.setOpeningDelay(20);
         scene.setEndDelay(60);
 
@@ -47,10 +45,35 @@ class CinematicSceneTest {
         assertEquals(2.25D, loaded.getCameraHeight());
         assertEquals(scene.getCrateBlock(), loaded.getCrateBlock());
         assertTrue(loaded.hasCrateBlock());
-        assertEquals(135.0D, loaded.getModelYaw());
-        assertEquals(40, loaded.getStartDelay());
         assertEquals(20, loaded.getOpeningDelay());
         assertEquals(60, loaded.getEndDelay());
+    }
+
+    /**
+     * Scene files written while cinematics could still spawn a ModelEngine prop carry {@code Model},
+     * {@code Model_Animation}, {@code Model_Yaw} and {@code Start_Delay} keys. They must load without
+     * throwing, and writing the scene back must strip them rather than preserve dead options.
+     */
+    @Test
+    void legacyModelKeysAreIgnoredAndStrippedOnWrite() {
+        YamlConfiguration config = new YamlConfiguration();
+        config.set(CinematicScene.KEY_NAME, "Legacy");
+        config.set(CinematicScene.KEY_OPENING_ID, "simple_roll");
+        config.set("Model", "common_crate");
+        config.set("Model_Animation", "open");
+        config.set("Model_Yaw", 135.0D);
+        config.set("Start_Delay", 40);
+
+        CinematicScene loaded = assertDoesNotThrow(() -> CinematicScene.read(config, "legacy"));
+        assertEquals("simple_roll", loaded.getOpeningId());
+
+        YamlConfiguration rewritten = new YamlConfiguration();
+        loaded.write(rewritten);
+
+        assertFalse(rewritten.contains("Model"));
+        assertFalse(rewritten.contains("Model_Animation"));
+        assertFalse(rewritten.contains("Model_Yaw"));
+        assertFalse(rewritten.contains("Start_Delay"));
     }
 
     @Test
@@ -159,10 +182,9 @@ class CinematicSceneTest {
     }
 
     /**
-     * A scene file written before {@code Model_Yaw}, {@code Start_Delay}, {@code Opening_Delay} and
-     * {@code End_Delay} existed has none of those keys. It must still load without throwing, landing
-     * on the same defaults a brand-new scene starts with - so old scenes keep behaving exactly as
-     * they did before these settings existed.
+     * A scene file written before {@code Opening_Delay} and {@code End_Delay} existed has neither
+     * key. It must still load without throwing, landing on the same defaults a brand-new scene starts
+     * with - so old scenes keep behaving exactly as they did before these settings existed.
      */
     @Test
     void sceneWithoutTimingKeysUsesDefaults() {
@@ -171,8 +193,6 @@ class CinematicSceneTest {
 
         CinematicScene loaded = CinematicScene.read(config, "legacy");
 
-        assertEquals(CinematicScene.DEFAULT_MODEL_YAW, loaded.getModelYaw());
-        assertEquals(CinematicScene.DEFAULT_START_DELAY, loaded.getStartDelay());
         assertEquals(CinematicScene.DEFAULT_OPENING_DELAY, loaded.getOpeningDelay());
         assertEquals(CinematicScene.DEFAULT_END_DELAY, loaded.getEndDelay());
     }
@@ -181,8 +201,6 @@ class CinematicSceneTest {
     void newSceneUsesDefaultTiming() {
         CinematicScene scene = new CinematicScene("vault");
 
-        assertEquals(0.0D, scene.getModelYaw());
-        assertEquals(0, scene.getStartDelay());
         assertEquals(0, scene.getOpeningDelay());
         assertEquals(0, scene.getEndDelay());
     }
@@ -196,11 +214,9 @@ class CinematicSceneTest {
     void negativeDelaysAreClampedToZero() {
         CinematicScene scene = new CinematicScene("vault");
 
-        scene.setStartDelay(-5);
         scene.setOpeningDelay(-5);
         scene.setEndDelay(-5);
 
-        assertEquals(0, scene.getStartDelay());
         assertEquals(0, scene.getOpeningDelay());
         assertEquals(0, scene.getEndDelay());
     }

@@ -12,12 +12,9 @@ import su.nightexpress.excellentcrates.api.opening.Opening;
 import su.nightexpress.excellentcrates.api.opening.OpeningProvider;
 import su.nightexpress.excellentcrates.crate.cost.Cost;
 import su.nightexpress.excellentcrates.crate.impl.CrateSource;
-import su.nightexpress.excellentcrates.hooks.impl.ModelEngineHook;
-import su.nightexpress.excellentcrates.hooks.impl.ModelEngineProp;
 import su.nightexpress.excellentcrates.opening.cinematic.scene.CinematicScene;
 import su.nightexpress.excellentcrates.opening.world.WorldOpening;
 import su.nightexpress.excellentcrates.util.pos.WorldPos;
-import su.nightexpress.nightcore.util.LocationUtil;
 
 /**
  * The fourth opening type: teleports the player to a dedicated stage and hands the actual opening
@@ -57,20 +54,17 @@ public class CinematicOpening extends WorldOpening {
     private boolean broken;
 
     private boolean arrived;
-    private boolean modelTriggered;
     private boolean handedOff;
 
     private long arrivalTick;
 
-    // Populated by arrive(), consumed by triggerModel() and handOff() once their own delay elapses.
+    // Populated by arrive(), consumed by handOff() once the opening delay elapses.
     private OpeningProvider delegateProvider;
-    private Location        stageLocation;
     private WorldPos        stageBlockPos;
     private WorldPos        blockPos;
     private Location        returnLocation;
     private GameMode        returnGameMode;
     private ArmorStand      cameraMarker;
-    private ModelEngineProp modelProp;
 
     public CinematicOpening(@NotNull CratesPlugin plugin,
                             @NotNull Player player,
@@ -94,12 +88,10 @@ public class CinematicOpening extends WorldOpening {
     }
 
     /**
-     * Drives the cinematic's three staged moments, each gated by how many ticks have passed since
-     * arrival: the player lands on the stage the instant this opening first ticks, the model prop
-     * spawns and plays its animation once {@link CinematicScene#getStartDelay()} elapses, and the
-     * delegate opening is finally handed off once {@link CinematicScene#getOpeningDelay()} elapses on
-     * top of that. With both delays left at zero this all still happens on the very first tick,
-     * exactly as it did before either delay existed.
+     * Drives the cinematic's two staged moments: the player lands on the stage the instant this
+     * opening first ticks, and the delegate opening is handed off once
+     * {@link CinematicScene#getOpeningDelay()} ticks have passed since arrival. With the delay left
+     * at zero both still happen on the very first tick, exactly as it did before the delay existed.
      */
     @Override
     protected void onTick() {
@@ -110,13 +102,7 @@ public class CinematicOpening extends WorldOpening {
             if (this.broken) return;
         }
 
-        long elapsed = this.tickCount - this.arrivalTick;
-
-        if (!this.modelTriggered && elapsed >= this.scene.getStartDelay()) {
-            this.triggerModel();
-        }
-
-        if (elapsed >= (long) this.scene.getStartDelay() + this.scene.getOpeningDelay()) {
+        if (this.tickCount - this.arrivalTick >= this.scene.getOpeningDelay()) {
             this.handOff();
         }
     }
@@ -124,7 +110,7 @@ public class CinematicOpening extends WorldOpening {
     /**
      * Validates the scene, then either teleports the player to the stage and locks their camera
      * there, or falls back to granting the reward directly. Everything captured here is reused by
-     * {@link #triggerModel()} and {@link #handOff()} once their own delay elapses.
+     * {@link #handOff()} once the opening delay elapses.
      */
     private void arrive() {
         this.arrived = true;
@@ -149,7 +135,6 @@ public class CinematicOpening extends WorldOpening {
             return;
         }
         this.delegateProvider = provider;
-        this.stageLocation = stageLocation;
         this.stageBlockPos = this.scene.hasCrateBlock() ? this.scene.getCrateBlock() : null;
 
         Block block = this.source.getBlock();
@@ -173,18 +158,8 @@ public class CinematicOpening extends WorldOpening {
     }
 
     /**
-     * Spawns the scene's model prop, if it has one, once {@link CinematicScene#getStartDelay()} has
-     * elapsed since arrival. Runs even for a scene with no model configured so the elapsed-tick
-     * bookkeeping in {@link #onTick()} stays simple - {@link #spawnModelProp} is what actually no-ops.
-     */
-    private void triggerModel() {
-        this.modelTriggered = true;
-        this.modelProp = this.spawnModelProp(this.stageLocation, this.stageBlockPos);
-    }
-
-    /**
-     * Creates and swaps in the delegate opening once {@link CinematicScene#getStartDelay()} plus
-     * {@link CinematicScene#getOpeningDelay()} has elapsed since arrival.
+     * Creates and swaps in the delegate opening once {@link CinematicScene#getOpeningDelay()} has
+     * elapsed since arrival.
      */
     private void handOff() {
         this.handedOff = true;
@@ -200,7 +175,7 @@ public class CinematicOpening extends WorldOpening {
 
         this.plugin.getOpeningManager().swapOpening(this.player, delegate);
         this.plugin.getCinematicManager().awaitReturn(this.player, this.returnLocation, this.returnGameMode,
-            this.crate, this.blockPos, this.cameraMarker, this.modelProp, this.scene.getEndDelay());
+            this.crate, this.blockPos, this.cameraMarker, this.scene.getEndDelay());
 
         // Past this point the crate has genuinely been opened by the delegate; refunding here would
         // be wrong since the delegate is what now owns (and will itself refund or grant) the cost.
@@ -223,29 +198,6 @@ public class CinematicOpening extends WorldOpening {
             stand.setPersistent(false);  // Never written to the region file.
             stand.setCollidable(false);
         });
-    }
-
-    /**
-     * Spawns the scene's model prop, if it has one - the crate model the player actually sees appear
-     * and play its opening animation at the stage. Optional: a scene with no {@link
-     * CinematicScene#hasModel() model} configured, or a server without ModelEngine installed, simply
-     * gets no prop, exactly like a scene with no stage falls back gracefully rather than erroring.
-     *
-     * <p>Prefers sitting on top of the scene's captured crate block - the same anchor Simple Roll's
-     * reward display uses - so the model appears where "the actual crate" was built. Falls back to
-     * the stage location itself if no crate block was captured.
-     */
-    @Nullable
-    private ModelEngineProp spawnModelProp(@NotNull Location stageLocation, @Nullable WorldPos stageBlockPos) {
-        if (!this.scene.hasModel() || !ModelEngineHook.isInstalled()) return null;
-
-        Block stageBlock = stageBlockPos == null ? null : stageBlockPos.toBlock();
-        Location propLocation = stageBlock != null
-            ? LocationUtil.setCenter2D(stageBlock.getLocation())
-            : LocationUtil.setCenter2D(stageLocation.clone());
-        propLocation.setYaw((float) this.scene.getModelYaw());
-
-        return ModelEngineHook.spawnProp(this.scene.getModelId(), this.scene.getModelAnimation(), propLocation, this.scene.getModelYaw());
     }
 
     private void failBroken(@NotNull String reason) {

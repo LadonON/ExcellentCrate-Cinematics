@@ -18,9 +18,6 @@
         <paper.version>1.21.11-R0.1-SNAPSHOT</paper.version>
         <nightcore.version>2.16.4</nightcore.version>
         <nexo.version>1.26.0</nexo.version>
-        <!-- ModelEngine (Ticxo) has no public Maven coordinate. This version is installed locally
-             from the exact jar the test server runs, via `mvn install:install-file` (see README). -->
-        <modelengine.version>4.1.0</modelengine.version>
 
         <junit.version>5.11.4</junit.version>
     </properties>
@@ -125,15 +122,6 @@
                     <artifactId>*</artifactId>
                 </exclusion>
             </exclusions>
-        </dependency>
-
-        <!-- Optional at runtime. Every reference to ModelEngine types is confined to ModelEngineHook
-             and ModelEngineBridge so the plugin links fine on servers without it installed. -->
-        <dependency>
-            <groupId>com.ticxo.modelengine</groupId>
-            <artifactId>modelengine-api</artifactId>
-            <version>${modelengine.version}</version>
-            <scope>provided</scope>
         </dependency>
 
         <!-- Tests cover the Bukkit-free core of the cinematic feature, so no server mocking

@@ -16,12 +16,10 @@ import su.nightexpress.nightcore.util.NumberUtil;
 import static su.nightexpress.nightcore.util.text.night.wrapper.TagWrappers.SOFT_YELLOW;
 
 /**
- * Sets how many ticks after the model prop's animation triggers the delegate opening actually
- * starts - always added on top of {@link CinematicScene#getStartDelay()}, not counted from arrival.
+ * Sets how many ticks after the player arrives at the stage the delegate opening actually starts.
  *
- * <p>Example: a 40-tick (2s) start delay followed by a 20-tick (1s) opening delay means the model
- * appears 2 seconds in, and the real opening animation begins 1 second after that - 3 seconds after
- * the player arrives.
+ * <p>Example: a 40-tick (2s) opening delay holds the player on the stage for 2 seconds before the
+ * real opening animation begins. Zero starts it the instant they arrive.
  */
 public class SceneOpeningDelayDialog extends Dialog<CinematicProvider> {
 

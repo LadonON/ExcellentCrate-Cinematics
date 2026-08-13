@@ -78,35 +78,9 @@ public class CinematicOptionsMenu extends LinkedMenu<CratesPlugin, CinematicProv
         .appendClick("Click to change")
         .build();
 
-    private static final IconLocale LOCALE_MODEL = LangEntry.iconBuilder("Editor.Button.Cinematic.Scene.Model").name("Model")
-        .appendCurrent("Current", GENERIC_VALUE).br()
-        .appendInfo("Which ModelEngine blueprint spawns", "on the crate block at the stage.").br()
-        .appendInfo("Optional, and requires the", "ModelEngine plugin.").br()
-        .appendClick("Click to change")
-        .build();
-
-    private static final IconLocale LOCALE_MODEL_ANIMATION = LangEntry.iconBuilder("Editor.Button.Cinematic.Scene.ModelAnimation").name("Model Animation")
-        .appendCurrent("Current", GENERIC_VALUE).br()
-        .appendInfo("Which animation plays on the model", "the instant it spawns.").br()
-        .appendInfo("Whether it holds on its last frame", "afterwards is set on the animation", "itself in Blockbench.").br()
-        .appendClick("Click to change")
-        .build();
-
-    private static final IconLocale LOCALE_MODEL_YAW = LangEntry.iconBuilder("Editor.Button.Cinematic.Scene.ModelYaw").name("Model Orientation")
-        .appendCurrent("Current", GENERIC_VALUE).br()
-        .appendInfo("Which way the model prop faces when", "it spawns, in degrees.").br()
-        .appendClick("Click to change")
-        .build();
-
-    private static final IconLocale LOCALE_START_DELAY = LangEntry.iconBuilder("Editor.Button.Cinematic.Scene.StartDelay").name("Start Delay")
-        .appendCurrent("Current", GENERIC_VALUE).br()
-        .appendInfo("How many ticks after arrival the model", "prop spawns and plays its animation.").br()
-        .appendClick("Click to change")
-        .build();
-
     private static final IconLocale LOCALE_OPENING_DELAY = LangEntry.iconBuilder("Editor.Button.Cinematic.Scene.OpeningDelay").name("Opening Delay")
         .appendCurrent("Current", GENERIC_VALUE).br()
-        .appendInfo("How many ticks after the model's", "animation triggers the delegate", "opening animation actually starts.").br()
+        .appendInfo("How many ticks after the player arrives", "the delegate opening animation", "actually starts.").br()
         .appendClick("Click to change")
         .build();
 
@@ -180,18 +154,10 @@ public class CinematicOptionsMenu extends LinkedMenu<CratesPlugin, CinematicProv
             }).build()
         );
 
-        viewer.addItem(NightItem.fromType(Material.REPEATER)
-            .localized(LOCALE_START_DELAY)
-            .replacement(replacer -> replacer.replace(GENERIC_VALUE, () -> String.valueOf(scene.getStartDelay())))
-            .toMenuItem().setSlots(23).setHandler((viewer1, event) -> {
-                this.dialogs.show(player, CinematicDialogs.SCENE_START_DELAY, provider, flush);
-            }).build()
-        );
-
         viewer.addItem(NightItem.fromType(Material.COMPARATOR)
             .localized(LOCALE_OPENING_DELAY)
             .replacement(replacer -> replacer.replace(GENERIC_VALUE, () -> String.valueOf(scene.getOpeningDelay())))
-            .toMenuItem().setSlots(24).setHandler((viewer1, event) -> {
+            .toMenuItem().setSlots(23).setHandler((viewer1, event) -> {
                 this.dialogs.show(player, CinematicDialogs.SCENE_OPENING_DELAY, provider, flush);
             }).build()
         );
@@ -199,33 +165,8 @@ public class CinematicOptionsMenu extends LinkedMenu<CratesPlugin, CinematicProv
         viewer.addItem(NightItem.fromType(Material.OBSERVER)
             .localized(LOCALE_END_DELAY)
             .replacement(replacer -> replacer.replace(GENERIC_VALUE, () -> String.valueOf(scene.getEndDelay())))
-            .toMenuItem().setSlots(25).setHandler((viewer1, event) -> {
+            .toMenuItem().setSlots(24).setHandler((viewer1, event) -> {
                 this.dialogs.show(player, CinematicDialogs.SCENE_END_DELAY, provider, flush);
-            }).build()
-        );
-
-        viewer.addItem(NightItem.fromType(Material.ARMOR_STAND)
-            .localized(LOCALE_MODEL)
-            .replacement(replacer -> replacer.replace(GENERIC_VALUE, () ->
-                scene.hasModel() ? scene.getModelId() : CoreLang.OTHER_NONE.text()))
-            .toMenuItem().setSlots(29).setHandler((viewer1, event) -> {
-                this.dialogs.show(player, CinematicDialogs.SCENE_MODEL, provider, flush);
-            }).build()
-        );
-
-        viewer.addItem(NightItem.fromType(Material.CLOCK)
-            .localized(LOCALE_MODEL_ANIMATION)
-            .replacement(replacer -> replacer.replace(GENERIC_VALUE, scene::getModelAnimation))
-            .toMenuItem().setSlots(31).setHandler((viewer1, event) -> {
-                this.dialogs.show(player, CinematicDialogs.SCENE_MODEL_ANIMATION, provider, flush);
-            }).build()
-        );
-
-        viewer.addItem(NightItem.fromType(Material.COMPASS)
-            .localized(LOCALE_MODEL_YAW)
-            .replacement(replacer -> replacer.replace(GENERIC_VALUE, () -> String.valueOf(scene.getModelYaw())))
-            .toMenuItem().setSlots(33).setHandler((viewer1, event) -> {
-                this.dialogs.show(player, CinematicDialogs.SCENE_MODEL_YAW, provider, flush);
             }).build()
         );
 
