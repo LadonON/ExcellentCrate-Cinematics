@@ -53,9 +53,24 @@ public class CinematicOpening extends WorldOpening {
 
     private final CinematicScene scene;
 
-    private boolean started;
     private boolean instaRolled;
     private boolean broken;
+
+    private boolean arrived;
+    private boolean modelTriggered;
+    private boolean handedOff;
+
+    private long arrivalTick;
+
+    // Populated by arrive(), consumed by triggerModel() and handOff() once their own delay elapses.
+    private OpeningProvider delegateProvider;
+    private Location        stageLocation;
+    private WorldPos        stageBlockPos;
+    private WorldPos        blockPos;
+    private Location        returnLocation;
+    private GameMode        returnGameMode;
+    private ArmorStand      cameraMarker;
+    private ModelEngineProp modelProp;
 
     public CinematicOpening(@NotNull CratesPlugin plugin,
                             @NotNull Player player,
@@ -73,24 +88,48 @@ public class CinematicOpening extends WorldOpening {
 
     @Override
     protected void onStart() {
-        // Intentionally empty - the hand-off happens on the first tick (see onTick), not here.
-        // Mass opening calls instaRoll() immediately after start(); starting eagerly here would
-        // teleport the player out and back for every crate in a 30-crate mass open.
-    }
-
-    @Override
-    protected void onTick() {
-        if (this.started) return; // Unreachable in practice - see the class comment - but cheap to guard.
-        this.started = true;
-
-        this.handOff();
+        // Intentionally empty - the hand-off happens on tick (see onTick), not here. Mass opening
+        // calls instaRoll() immediately after start(); starting eagerly here would teleport the
+        // player out and back for every crate in a 30-crate mass open.
     }
 
     /**
-     * Validates the scene, then either teleports the player to the stage and starts the delegate
-     * opening, or falls back to granting the reward directly.
+     * Drives the cinematic's three staged moments, each gated by how many ticks have passed since
+     * arrival: the player lands on the stage the instant this opening first ticks, the model prop
+     * spawns and plays its animation once {@link CinematicScene#getStartDelay()} elapses, and the
+     * delegate opening is finally handed off once {@link CinematicScene#getOpeningDelay()} elapses on
+     * top of that. With both delays left at zero this all still happens on the very first tick,
+     * exactly as it did before either delay existed.
      */
-    private void handOff() {
+    @Override
+    protected void onTick() {
+        if (this.broken || this.handedOff) return; // Nothing left to drive.
+
+        if (!this.arrived) {
+            this.arrive();
+            if (this.broken) return;
+        }
+
+        long elapsed = this.tickCount - this.arrivalTick;
+
+        if (!this.modelTriggered && elapsed >= this.scene.getStartDelay()) {
+            this.triggerModel();
+        }
+
+        if (elapsed >= (long) this.scene.getStartDelay() + this.scene.getOpeningDelay()) {
+            this.handOff();
+        }
+    }
+
+    /**
+     * Validates the scene, then either teleports the player to the stage and locks their camera
+     * there, or falls back to granting the reward directly. Everything captured here is reused by
+     * {@link #triggerModel()} and {@link #handOff()} once their own delay elapses.
+     */
+    private void arrive() {
+        this.arrived = true;
+        this.arrivalTick = this.tickCount;
+
         Location stageLocation = this.scene.getStage().toLocation();
         if (!this.scene.isPlayable() || stageLocation == null) {
             this.failBroken("its stage is not set, or the stage's world is not loaded");
@@ -109,15 +148,18 @@ public class CinematicOpening extends WorldOpening {
             this.failBroken("its opening animation '" + openingId + "' is itself a cinematic scene, which is not allowed");
             return;
         }
+        this.delegateProvider = provider;
+        this.stageLocation = stageLocation;
+        this.stageBlockPos = this.scene.hasCrateBlock() ? this.scene.getCrateBlock() : null;
 
         Block block = this.source.getBlock();
-        WorldPos blockPos = block == null ? null : WorldPos.from(block);
-        if (blockPos != null) {
-            this.hideHologram(blockPos);
+        this.blockPos = block == null ? null : WorldPos.from(block);
+        if (this.blockPos != null) {
+            this.hideHologram(this.blockPos);
         }
 
-        Location returnLocation = this.player.getLocation().clone();
-        GameMode returnGameMode = this.player.getGameMode();
+        this.returnLocation = this.player.getLocation().clone();
+        this.returnGameMode = this.player.getGameMode();
 
         // Locking the camera above the stage rather than at it gives a slightly better vantage over
         // whatever the delegate renders there, and keeps the player's own hitbox - even though
@@ -125,9 +167,27 @@ public class CinematicOpening extends WorldOpening {
         Location cameraLocation = stageLocation.clone().add(0D, this.scene.getCameraHeight(), 0D);
         this.player.teleport(cameraLocation);
 
-        ArmorStand cameraMarker = this.spawnCameraMarker(cameraLocation);
+        this.cameraMarker = this.spawnCameraMarker(cameraLocation);
         this.player.setGameMode(GameMode.SPECTATOR);
-        this.player.setSpectatorTarget(cameraMarker);
+        this.player.setSpectatorTarget(this.cameraMarker);
+    }
+
+    /**
+     * Spawns the scene's model prop, if it has one, once {@link CinematicScene#getStartDelay()} has
+     * elapsed since arrival. Runs even for a scene with no model configured so the elapsed-tick
+     * bookkeeping in {@link #onTick()} stays simple - {@link #spawnModelProp} is what actually no-ops.
+     */
+    private void triggerModel() {
+        this.modelTriggered = true;
+        this.modelProp = this.spawnModelProp(this.stageLocation, this.stageBlockPos);
+    }
+
+    /**
+     * Creates and swaps in the delegate opening once {@link CinematicScene#getStartDelay()} plus
+     * {@link CinematicScene#getOpeningDelay()} has elapsed since arrival.
+     */
+    private void handOff() {
+        this.handedOff = true;
 
         // The delegate renders and rolls its own reward against the same crate, at the stage rather
         // than wherever the player originally clicked - so it gets a source built from the scene's
@@ -135,14 +195,12 @@ public class CinematicOpening extends WorldOpening {
         // Simple Roll (and anything else that renders on top of a block) needs this to sit on the
         // stage's crate rather than floating wherever the locked camera happens to face; without it,
         // it falls back to that floating position gracefully rather than erroring.
-        WorldPos stageBlockPos = this.scene.hasCrateBlock() ? this.scene.getCrateBlock() : null;
-        CrateSource stageSource = new CrateSource(this.crate, null, stageBlockPos);
-        Opening delegate = provider.createOpening(this.player, stageSource, null);
-
-        ModelEngineProp modelProp = this.spawnModelProp(stageLocation, stageBlockPos);
+        CrateSource stageSource = new CrateSource(this.crate, null, this.stageBlockPos);
+        Opening delegate = this.delegateProvider.createOpening(this.player, stageSource, null);
 
         this.plugin.getOpeningManager().swapOpening(this.player, delegate);
-        this.plugin.getCinematicManager().awaitReturn(this.player, returnLocation, returnGameMode, this.crate, blockPos, cameraMarker, modelProp);
+        this.plugin.getCinematicManager().awaitReturn(this.player, this.returnLocation, this.returnGameMode,
+            this.crate, this.blockPos, this.cameraMarker, this.modelProp, this.scene.getEndDelay());
 
         // Past this point the crate has genuinely been opened by the delegate; refunding here would
         // be wrong since the delegate is what now owns (and will itself refund or grant) the cost.
@@ -185,8 +243,9 @@ public class CinematicOpening extends WorldOpening {
         Location propLocation = stageBlock != null
             ? LocationUtil.setCenter2D(stageBlock.getLocation())
             : LocationUtil.setCenter2D(stageLocation.clone());
+        propLocation.setYaw((float) this.scene.getModelYaw());
 
-        return ModelEngineHook.spawnProp(this.scene.getModelId(), this.scene.getModelAnimation(), propLocation);
+        return ModelEngineHook.spawnProp(this.scene.getModelId(), this.scene.getModelAnimation(), propLocation, this.scene.getModelYaw());
     }
 
     private void failBroken(@NotNull String reason) {

@@ -62,7 +62,8 @@ public class ModelEngineHook {
     }
 
     /**
-     * Spawns {@code modelId} at {@code location} and plays {@code animationId} on it.
+     * Spawns {@code modelId} at {@code location}, facing {@code yaw} degrees, and plays
+     * {@code animationId} on it.
      *
      * <p>Whether the model holds on the animation's last frame - or loops, or does anything else
      * once it finishes - is entirely up to that animation's own loop mode as authored in Blockbench;
@@ -72,9 +73,9 @@ public class ModelEngineHook {
      * {@code null} if ModelEngine is not installed or the id does not resolve to a model.
      */
     @Nullable
-    public static ModelEngineProp spawnProp(@NotNull String modelId, @NotNull String animationId, @NotNull Location location) {
+    public static ModelEngineProp spawnProp(@NotNull String modelId, @NotNull String animationId, @NotNull Location location, double yaw) {
         if (!isInstalled()) return null;
 
-        return ModelEngineBridge.spawn(modelId, animationId, location);
+        return ModelEngineBridge.spawn(modelId, animationId, location, yaw);
     }
 }

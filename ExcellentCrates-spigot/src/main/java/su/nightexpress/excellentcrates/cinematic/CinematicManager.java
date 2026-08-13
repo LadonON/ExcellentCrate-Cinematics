@@ -22,10 +22,14 @@ import su.nightexpress.excellentcrates.dialog.DialogRegistry;
 import su.nightexpress.excellentcrates.dialog.cinematic.CinematicDialogs;
 import su.nightexpress.excellentcrates.dialog.cinematic.SceneCameraHeightDialog;
 import su.nightexpress.excellentcrates.dialog.cinematic.SceneCreationDialog;
+import su.nightexpress.excellentcrates.dialog.cinematic.SceneEndDelayDialog;
 import su.nightexpress.excellentcrates.dialog.cinematic.SceneNameDialog;
 import su.nightexpress.excellentcrates.dialog.cinematic.SceneModelAnimationDialog;
 import su.nightexpress.excellentcrates.dialog.cinematic.SceneModelDialog;
+import su.nightexpress.excellentcrates.dialog.cinematic.SceneModelYawDialog;
+import su.nightexpress.excellentcrates.dialog.cinematic.SceneOpeningDelayDialog;
 import su.nightexpress.excellentcrates.dialog.cinematic.SceneOpeningDialog;
+import su.nightexpress.excellentcrates.dialog.cinematic.SceneStartDelayDialog;
 import su.nightexpress.excellentcrates.hooks.impl.ModelEngineProp;
 import su.nightexpress.excellentcrates.opening.cinematic.CinematicProvider;
 import su.nightexpress.excellentcrates.opening.cinematic.scene.CinematicScene;
@@ -85,11 +89,11 @@ public class CinematicManager extends AbstractManager<CratesPlugin> {
                 this.finishReturn(player, entry.getValue());
             }
             else {
-                if (entry.getValue().cameraMarker().isValid()) {
-                    entry.getValue().cameraMarker().remove();
+                if (entry.getValue().cameraMarker.isValid()) {
+                    entry.getValue().cameraMarker.remove();
                 }
-                if (entry.getValue().modelProp() != null) {
-                    entry.getValue().modelProp().remove();
+                if (entry.getValue().modelProp != null) {
+                    entry.getValue().modelProp.remove();
                 }
             }
         }
@@ -103,6 +107,10 @@ public class CinematicManager extends AbstractManager<CratesPlugin> {
         this.dialogs.register(CinematicDialogs.SCENE_CAMERA_HEIGHT, SceneCameraHeightDialog::new);
         this.dialogs.register(CinematicDialogs.SCENE_MODEL, () -> new SceneModelDialog(this.plugin));
         this.dialogs.register(CinematicDialogs.SCENE_MODEL_ANIMATION, SceneModelAnimationDialog::new);
+        this.dialogs.register(CinematicDialogs.SCENE_MODEL_YAW, SceneModelYawDialog::new);
+        this.dialogs.register(CinematicDialogs.SCENE_START_DELAY, SceneStartDelayDialog::new);
+        this.dialogs.register(CinematicDialogs.SCENE_OPENING_DELAY, SceneOpeningDelayDialog::new);
+        this.dialogs.register(CinematicDialogs.SCENE_END_DELAY, SceneEndDelayDialog::new);
     }
 
     // ------------------------------------------------------------------
@@ -276,11 +284,13 @@ public class CinematicManager extends AbstractManager<CratesPlugin> {
      * @param modelProp    the scene's ModelEngine model prop, if it spawned one, so it can be removed
      *                     once the delegate finishes; {@code null} if the scene has no model, or
      *                     ModelEngine is not installed.
+     * @param endDelayTicks how many ticks to hold the camera lock and model prop in place after the
+     *                      delegate opening finishes, before actually teleporting the player back.
      */
     public void awaitReturn(@NotNull Player player, @NotNull Location returnLocation, @NotNull GameMode returnGameMode,
                             @NotNull Crate crate, @Nullable WorldPos blockPos, @NotNull ArmorStand cameraMarker,
-                            @Nullable ModelEngineProp modelProp) {
-        this.pendingReturns.put(player.getUniqueId(), new PendingReturn(returnLocation.clone(), returnGameMode, crate, blockPos, cameraMarker, modelProp));
+                            @Nullable ModelEngineProp modelProp, int endDelayTicks) {
+        this.pendingReturns.put(player.getUniqueId(), new PendingReturn(returnLocation.clone(), returnGameMode, crate, blockPos, cameraMarker, modelProp, endDelayTicks));
     }
 
     /**
@@ -305,26 +315,38 @@ public class CinematicManager extends AbstractManager<CratesPlugin> {
         Iterator<Map.Entry<UUID, PendingReturn>> iterator = this.pendingReturns.entrySet().iterator();
         while (iterator.hasNext()) {
             Map.Entry<UUID, PendingReturn> entry = iterator.next();
+            PendingReturn pending = entry.getValue();
             Player player = Bukkit.getPlayer(entry.getKey());
 
             if (player == null) {
                 // Normally forceReturn already handled this on quit and the entry would be gone
                 // entirely; this is a defensive fallback so a marker or model prop can never linger
                 // regardless.
-                if (entry.getValue().cameraMarker().isValid()) {
-                    entry.getValue().cameraMarker().remove();
+                if (pending.cameraMarker.isValid()) {
+                    pending.cameraMarker.remove();
                 }
-                if (entry.getValue().modelProp() != null) {
-                    entry.getValue().modelProp().remove();
+                if (pending.modelProp != null) {
+                    pending.modelProp.remove();
                 }
                 iterator.remove();
                 continue;
             }
 
-            // Still running - the delegate hasn't finished (or been cancelled) yet.
-            if (this.plugin.getOpeningManager().isOpening(player)) continue;
+            if (pending.returnCountdown < 0) {
+                // Still running - the delegate hasn't finished (or been cancelled) yet.
+                if (this.plugin.getOpeningManager().isOpening(player)) continue;
 
-            this.finishReturn(player, entry.getValue());
+                // The delegate just finished. Start (or skip, if unconfigured) the scene's end delay
+                // before actually stepping the player back out.
+                pending.returnCountdown = pending.endDelayTicks;
+            }
+
+            if (pending.returnCountdown > 0) {
+                pending.returnCountdown--;
+                continue;
+            }
+
+            this.finishReturn(player, pending);
             iterator.remove();
         }
     }
@@ -337,21 +359,21 @@ public class CinematicManager extends AbstractManager<CratesPlugin> {
      * marker that already stopped existing can leave the client visually stuck on the dead entity.
      */
     private void finishReturn(@NotNull Player player, @NotNull PendingReturn pending) {
-        if (player.getSpectatorTarget() == pending.cameraMarker()) {
+        if (player.getSpectatorTarget() == pending.cameraMarker) {
             player.setSpectatorTarget(null);
         }
-        if (pending.cameraMarker().isValid()) {
-            pending.cameraMarker().remove();
+        if (pending.cameraMarker.isValid()) {
+            pending.cameraMarker.remove();
         }
-        if (pending.modelProp() != null) {
-            pending.modelProp().remove();
+        if (pending.modelProp != null) {
+            pending.modelProp.remove();
         }
 
-        player.setGameMode(pending.returnGameMode());
-        player.teleport(pending.returnLocation());
+        player.setGameMode(pending.returnGameMode);
+        player.teleport(pending.returnLocation);
 
-        if (pending.blockPos() != null) {
-            this.plugin.getHologramManager().ifPresent(hologramManager -> hologramManager.enableBlockHologram(pending.crate(), pending.blockPos()));
+        if (pending.blockPos != null) {
+            this.plugin.getHologramManager().ifPresent(hologramManager -> hologramManager.enableBlockHologram(pending.crate, pending.blockPos));
         }
     }
 
@@ -359,8 +381,34 @@ public class CinematicManager extends AbstractManager<CratesPlugin> {
      * What a hand-off needs remembered until the delegate finishes: where and in what gamemode to put
      * the player back, which hologram (if any) to restore, which marker is locking their camera, and
      * which model prop (if any) to remove.
+     *
+     * <p>{@code returnCountdown} starts at {@code -1}, meaning the delegate is still running. Once
+     * {@link #tickReturns()} first notices the delegate has finished, it is set to the scene's
+     * {@code endDelayTicks} and counted down to zero before the return actually happens - so a scene
+     * with no end delay configured returns the same tick the delegate finishes, exactly as before end
+     * delays existed.
      */
-    private record PendingReturn(@NotNull Location returnLocation, @NotNull GameMode returnGameMode,
-                                 @NotNull Crate crate, @Nullable WorldPos blockPos, @NotNull ArmorStand cameraMarker,
-                                 @Nullable ModelEngineProp modelProp) {}
+    private static final class PendingReturn {
+        private final Location        returnLocation;
+        private final GameMode        returnGameMode;
+        private final Crate           crate;
+        private final WorldPos        blockPos;
+        private final ArmorStand      cameraMarker;
+        private final ModelEngineProp modelProp;
+        private final int             endDelayTicks;
+
+        private int returnCountdown = -1;
+
+        private PendingReturn(@NotNull Location returnLocation, @NotNull GameMode returnGameMode,
+                              @NotNull Crate crate, @Nullable WorldPos blockPos, @NotNull ArmorStand cameraMarker,
+                              @Nullable ModelEngineProp modelProp, int endDelayTicks) {
+            this.returnLocation = returnLocation;
+            this.returnGameMode = returnGameMode;
+            this.crate = crate;
+            this.blockPos = blockPos;
+            this.cameraMarker = cameraMarker;
+            this.modelProp = modelProp;
+            this.endDelayTicks = endDelayTicks;
+        }
+    }
 }

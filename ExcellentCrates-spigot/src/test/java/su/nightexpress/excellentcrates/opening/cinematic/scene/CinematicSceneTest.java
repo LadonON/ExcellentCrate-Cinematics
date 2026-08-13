@@ -33,6 +33,10 @@ class CinematicSceneTest {
         scene.setOpeningId("simple_roll");
         scene.setCameraHeight(2.25D);
         scene.setCrateBlock(new WorldPos("world", 10, 63, -20));
+        scene.setModelYaw(135.0D);
+        scene.setStartDelay(40);
+        scene.setOpeningDelay(20);
+        scene.setEndDelay(60);
 
         CinematicScene loaded = roundTrip(scene);
 
@@ -43,6 +47,10 @@ class CinematicSceneTest {
         assertEquals(2.25D, loaded.getCameraHeight());
         assertEquals(scene.getCrateBlock(), loaded.getCrateBlock());
         assertTrue(loaded.hasCrateBlock());
+        assertEquals(135.0D, loaded.getModelYaw());
+        assertEquals(40, loaded.getStartDelay());
+        assertEquals(20, loaded.getOpeningDelay());
+        assertEquals(60, loaded.getEndDelay());
     }
 
     @Test
@@ -148,5 +156,52 @@ class CinematicSceneTest {
 
         assertFalse(loaded.hasOpeningId());
         assertFalse(loaded.isPlayable());
+    }
+
+    /**
+     * A scene file written before {@code Model_Yaw}, {@code Start_Delay}, {@code Opening_Delay} and
+     * {@code End_Delay} existed has none of those keys. It must still load without throwing, landing
+     * on the same defaults a brand-new scene starts with - so old scenes keep behaving exactly as
+     * they did before these settings existed.
+     */
+    @Test
+    void sceneWithoutTimingKeysUsesDefaults() {
+        YamlConfiguration config = new YamlConfiguration();
+        config.set(CinematicScene.KEY_NAME, "Legacy");
+
+        CinematicScene loaded = CinematicScene.read(config, "legacy");
+
+        assertEquals(CinematicScene.DEFAULT_MODEL_YAW, loaded.getModelYaw());
+        assertEquals(CinematicScene.DEFAULT_START_DELAY, loaded.getStartDelay());
+        assertEquals(CinematicScene.DEFAULT_OPENING_DELAY, loaded.getOpeningDelay());
+        assertEquals(CinematicScene.DEFAULT_END_DELAY, loaded.getEndDelay());
+    }
+
+    @Test
+    void newSceneUsesDefaultTiming() {
+        CinematicScene scene = new CinematicScene("vault");
+
+        assertEquals(0.0D, scene.getModelYaw());
+        assertEquals(0, scene.getStartDelay());
+        assertEquals(0, scene.getOpeningDelay());
+        assertEquals(0, scene.getEndDelay());
+    }
+
+    /**
+     * Negative delays make no sense as a wait time, so they are clamped to zero rather than allowed
+     * to silently do nothing (or worse, be misread as "immediately" by some future caller that
+     * doesn't expect a negative tick count).
+     */
+    @Test
+    void negativeDelaysAreClampedToZero() {
+        CinematicScene scene = new CinematicScene("vault");
+
+        scene.setStartDelay(-5);
+        scene.setOpeningDelay(-5);
+        scene.setEndDelay(-5);
+
+        assertEquals(0, scene.getStartDelay());
+        assertEquals(0, scene.getOpeningDelay());
+        assertEquals(0, scene.getEndDelay());
     }
 }

@@ -26,12 +26,28 @@ public class CinematicScene {
     public static final String KEY_CRATE_BLOCK     = "Crate_Block";
     public static final String KEY_MODEL_ID        = "Model";
     public static final String KEY_MODEL_ANIMATION = "Model_Animation";
+    public static final String KEY_MODEL_YAW       = "Model_Yaw";
+    public static final String KEY_START_DELAY     = "Start_Delay";
+    public static final String KEY_OPENING_DELAY   = "Opening_Delay";
+    public static final String KEY_END_DELAY       = "End_Delay";
 
     /** How far above the stage the locked camera sits when a scene does not say otherwise. */
     public static final double DEFAULT_CAMERA_HEIGHT = 1.7D;
 
     /** Which animation plays when the model prop spawns, when a scene does not say otherwise. */
     public static final String DEFAULT_MODEL_ANIMATION = "open";
+
+    /** Which way the model prop faces, in degrees, when a scene does not say otherwise. */
+    public static final double DEFAULT_MODEL_YAW = 0.0D;
+
+    /** How many ticks after arrival the model prop spawns and plays its animation, by default. */
+    public static final int DEFAULT_START_DELAY = 0;
+
+    /** How many ticks after the model prop's animation triggers the delegate opening starts, by default. */
+    public static final int DEFAULT_OPENING_DELAY = 0;
+
+    /** How many ticks after the delegate opening finishes the player is teleported back, by default. */
+    public static final int DEFAULT_END_DELAY = 0;
 
     private final String id;
 
@@ -42,6 +58,10 @@ public class CinematicScene {
     private WorldPos   crateBlock;
     private String     modelId;
     private String     modelAnimation;
+    private double     modelYaw;
+    private int        startDelay;
+    private int        openingDelay;
+    private int        endDelay;
 
     public CinematicScene(@NotNull String id) {
         this.id = id.toLowerCase();
@@ -52,6 +72,10 @@ public class CinematicScene {
         this.crateBlock = WorldPos.empty();
         this.modelId = "";
         this.modelAnimation = DEFAULT_MODEL_ANIMATION;
+        this.modelYaw = DEFAULT_MODEL_YAW;
+        this.startDelay = DEFAULT_START_DELAY;
+        this.openingDelay = DEFAULT_OPENING_DELAY;
+        this.endDelay = DEFAULT_END_DELAY;
     }
 
     @NotNull
@@ -65,6 +89,10 @@ public class CinematicScene {
         scene.setCrateBlock(WorldPos.deserialize(config.getString(KEY_CRATE_BLOCK, "")));
         scene.setModelId(config.getString(KEY_MODEL_ID, ""));
         scene.setModelAnimation(config.getString(KEY_MODEL_ANIMATION, DEFAULT_MODEL_ANIMATION));
+        scene.setModelYaw(config.getDouble(KEY_MODEL_YAW, DEFAULT_MODEL_YAW));
+        scene.setStartDelay(config.getInt(KEY_START_DELAY, DEFAULT_START_DELAY));
+        scene.setOpeningDelay(config.getInt(KEY_OPENING_DELAY, DEFAULT_OPENING_DELAY));
+        scene.setEndDelay(config.getInt(KEY_END_DELAY, DEFAULT_END_DELAY));
 
         return scene;
     }
@@ -77,6 +105,10 @@ public class CinematicScene {
         config.set(KEY_CRATE_BLOCK, this.crateBlock.serialize());
         config.set(KEY_MODEL_ID, this.modelId);
         config.set(KEY_MODEL_ANIMATION, this.modelAnimation);
+        config.set(KEY_MODEL_YAW, this.modelYaw);
+        config.set(KEY_START_DELAY, this.startDelay);
+        config.set(KEY_OPENING_DELAY, this.openingDelay);
+        config.set(KEY_END_DELAY, this.endDelay);
     }
 
     /**
@@ -194,5 +226,54 @@ public class CinematicScene {
 
     public void setModelAnimation(@NotNull String modelAnimation) {
         this.modelAnimation = modelAnimation;
+    }
+
+    /**
+     * @return which way the model prop faces, in degrees, using the same yaw convention as a
+     * player's own facing (0 = south, 90 = west, and so on).
+     */
+    public double getModelYaw() {
+        return this.modelYaw;
+    }
+
+    public void setModelYaw(double modelYaw) {
+        this.modelYaw = modelYaw;
+    }
+
+    /**
+     * @return how many ticks after the player arrives at the stage the model prop spawns and its
+     * {@link #getModelAnimation()} triggers. Zero means it spawns the instant the player arrives.
+     */
+    public int getStartDelay() {
+        return this.startDelay;
+    }
+
+    public void setStartDelay(int startDelay) {
+        this.startDelay = Math.max(0, startDelay);
+    }
+
+    /**
+     * @return how many ticks after the model prop's animation triggers the delegate opening actually
+     * starts. Zero means it starts the same tick the model appears. Meaningless on its own - always
+     * added on top of {@link #getStartDelay()} to get the total delay from arrival.
+     */
+    public int getOpeningDelay() {
+        return this.openingDelay;
+    }
+
+    public void setOpeningDelay(int openingDelay) {
+        this.openingDelay = Math.max(0, openingDelay);
+    }
+
+    /**
+     * @return how many ticks after the delegate opening finishes the player is teleported back and
+     * the model prop removed. Zero means the return happens the same tick the delegate finishes.
+     */
+    public int getEndDelay() {
+        return this.endDelay;
+    }
+
+    public void setEndDelay(int endDelay) {
+        this.endDelay = Math.max(0, endDelay);
     }
 }

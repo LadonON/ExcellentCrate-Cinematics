@@ -39,7 +39,7 @@ final class ModelEngineBridge {
 
     /**
      * Spawns {@code modelId} riding an invisible, collision-free {@link ArmorStand} at
-     * {@code location}, and plays {@code animationId} on it if one was given.
+     * {@code location}, facing {@code yaw}, and plays {@code animationId} on it if one was given.
      *
      * <p>Whether the model holds on its last frame once the animation finishes is entirely up to
      * how that animation's loop mode is authored in the blueprint - this only starts it once.
@@ -47,7 +47,7 @@ final class ModelEngineBridge {
      * @return the spawned prop, or {@code null} if the blueprint id does not resolve to a model.
      */
     @Nullable
-    static ModelEngineProp spawn(@NotNull String modelId, @NotNull String animationId, @NotNull Location location) {
+    static ModelEngineProp spawn(@NotNull String modelId, @NotNull String animationId, @NotNull Location location, double yaw) {
         if (!hasBlueprint(modelId)) return null;
 
         ArmorStand base = location.getWorld().spawn(location, ArmorStand.class, stand -> {
@@ -61,6 +61,15 @@ final class ModelEngineBridge {
         });
 
         ModeledEntity modeledEntity = ModelEngineAPI.createModeledEntity(base);
+
+        // createModeledEntity() alone never hands the entity to ModelEngine's own updater - without
+        // this it is never ticked, so the model neither renders correctly nor advances any animation
+        // playing on it.
+        modeledEntity.registerSelf();
+
+        modeledEntity.setYBodyRotImmediately((float) yaw);
+        modeledEntity.setYHeadRotImmediately((float) yaw);
+
         ActiveModel activeModel = ModelEngineAPI.createActiveModel(modelId);
         modeledEntity.addModel(activeModel, true);
 

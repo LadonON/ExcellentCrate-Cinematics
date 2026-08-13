@@ -15,4 +15,8 @@ public class CinematicDialogs {
     public static final DialogKey<CinematicProvider> SCENE_CAMERA_HEIGHT   = new DialogKey<>("cinematic_scene_camera_height");
     public static final DialogKey<CinematicProvider> SCENE_MODEL           = new DialogKey<>("cinematic_scene_model");
     public static final DialogKey<CinematicProvider> SCENE_MODEL_ANIMATION = new DialogKey<>("cinematic_scene_model_animation");
+    public static final DialogKey<CinematicProvider> SCENE_MODEL_YAW       = new DialogKey<>("cinematic_scene_model_yaw");
+    public static final DialogKey<CinematicProvider> SCENE_START_DELAY     = new DialogKey<>("cinematic_scene_start_delay");
+    public static final DialogKey<CinematicProvider> SCENE_OPENING_DELAY   = new DialogKey<>("cinematic_scene_opening_delay");
+    public static final DialogKey<CinematicProvider> SCENE_END_DELAY       = new DialogKey<>("cinematic_scene_end_delay");
 }

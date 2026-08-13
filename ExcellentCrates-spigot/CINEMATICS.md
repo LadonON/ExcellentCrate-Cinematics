@@ -81,6 +81,14 @@ Crate_Block: 128,64,-46,world   # Optional. The block a block-anchored delegate 
 Model: crate_lvl1   # Optional. A ModelEngine blueprint id, spawned on Crate_Block at hand-off.
 
 Model_Animation: open   # Which animation plays the instant the model spawns. Default "open".
+
+Model_Yaw: 0.0   # Which way the model prop faces, in degrees. Default 0.
+
+Start_Delay: 0   # Ticks after arrival before the model prop spawns and animates. Default 0.
+
+Opening_Delay: 0   # Ticks after Start_Delay before the delegate opening starts. Default 0.
+
+End_Delay: 0   # Ticks after the delegate finishes before the player is teleported back. Default 0.
 ```
 
 `Stage` is captured in-game — walk to wherever you have built "the actual crate" (decorate it however
@@ -101,7 +109,10 @@ crate block. Delegates that don't care about a block — GUI-based ones like `cs
 
 `Model` is entirely optional and requires the [ModelEngine](https://modelengine.info) plugin. When
 set, the hand-off spawns that blueprint on `Crate_Block` (or, if no crate block was captured, at the
-stage location itself) the instant the player arrives, and plays `Model_Animation` on it once.
+stage location itself) once `Start_Delay` has elapsed after the player arrives, and plays
+`Model_Animation` on it once. `Model_Yaw` sets which way it faces, independent of whichever direction
+the admin happened to be looking when they captured the stage — 0 = south, 90 = west, 180 = north,
+270 = east, the same convention as a player's own facing.
 
 Whether the model holds on its last frame afterwards, loops, or does anything else is entirely up to
 how that animation's loop mode is authored in Blockbench — this plugin only starts the animation, it
@@ -112,6 +123,25 @@ skipped by mass-opening, or was cut short by a disconnect.
 
 A scene works exactly as before without a `Model` set, or on a server without ModelEngine installed —
 this only replaces whatever built-in reveal the delegate opening renders with a custom model.
+
+### Timing the reveal
+
+Three delays, all in ticks (20 ticks = 1 second), stage the cinematic's beginning and end. All default
+to `0`, which reproduces the original behavior exactly: the model appears, and the delegate opening
+starts, the instant the player arrives, and the player is teleported back the instant the delegate
+finishes.
+
+- **`Start_Delay`** — ticks after arrival before the model prop spawns and plays its animation. This
+  is the cinematic's "beginning" delay.
+- **`Opening_Delay`** — ticks after the model's animation triggers before the delegate opening
+  actually starts. Added on top of `Start_Delay`, not counted from arrival.
+- **`End_Delay`** — ticks after the delegate opening finishes before the player is teleported back and
+  the model prop removed. Lets the delegate's final frame, or the model's held pose, linger a moment
+  before the camera lock releases.
+
+For example, `Start_Delay: 40` (2 seconds) followed by `Opening_Delay: 20` (1 second) holds on an
+empty stage for 2 seconds, then plays the model's opening animation, then starts the delegate opening
+1 second after that — 3 seconds after the player arrived in total.
 
 ---
 
@@ -126,10 +156,13 @@ this only replaces whatever built-in reveal the delegate opening renders with a 
 4. **Camera Height.** Optional — defaults to 1.7 blocks above the stage. Change it if that vantage
    doesn't suit the space you built.
 5. **Model.** Optional, and only shown if ModelEngine is installed. Pick a blueprint to spawn on the
-   crate block at hand-off, and which animation plays the instant it appears.
-6. **Point a crate at the scene.** In that crate's editor, *Opening Animation* → the cinematic scene's
+   crate block at hand-off, which animation plays the instant it appears, and which way it faces.
+6. **Start Delay / Opening Delay / End Delay.** Optional — all default to `0`. Stagger when the model
+   appears, when the delegate opening actually starts, and how long the final scene lingers before the
+   player is teleported back.
+7. **Point a crate at the scene.** In that crate's editor, *Opening Animation* → the cinematic scene's
    id, same as picking any other opening type.
-7. **Link the crate to a block**, same as any physical crate.
+8. **Link the crate to a block**, same as any physical crate.
 
 There is no frame timeline and no camera keyframes — the visuals are whichever opening type you
 delegated to, unchanged from how they already work, plus whatever model prop you optionally configured.

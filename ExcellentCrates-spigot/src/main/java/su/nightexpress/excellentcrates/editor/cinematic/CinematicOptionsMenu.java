@@ -92,6 +92,30 @@ public class CinematicOptionsMenu extends LinkedMenu<CratesPlugin, CinematicProv
         .appendClick("Click to change")
         .build();
 
+    private static final IconLocale LOCALE_MODEL_YAW = LangEntry.iconBuilder("Editor.Button.Cinematic.Scene.ModelYaw").name("Model Orientation")
+        .appendCurrent("Current", GENERIC_VALUE).br()
+        .appendInfo("Which way the model prop faces when", "it spawns, in degrees.").br()
+        .appendClick("Click to change")
+        .build();
+
+    private static final IconLocale LOCALE_START_DELAY = LangEntry.iconBuilder("Editor.Button.Cinematic.Scene.StartDelay").name("Start Delay")
+        .appendCurrent("Current", GENERIC_VALUE).br()
+        .appendInfo("How many ticks after arrival the model", "prop spawns and plays its animation.").br()
+        .appendClick("Click to change")
+        .build();
+
+    private static final IconLocale LOCALE_OPENING_DELAY = LangEntry.iconBuilder("Editor.Button.Cinematic.Scene.OpeningDelay").name("Opening Delay")
+        .appendCurrent("Current", GENERIC_VALUE).br()
+        .appendInfo("How many ticks after the model's", "animation triggers the delegate", "opening animation actually starts.").br()
+        .appendClick("Click to change")
+        .build();
+
+    private static final IconLocale LOCALE_END_DELAY = LangEntry.iconBuilder("Editor.Button.Cinematic.Scene.EndDelay").name("End Delay")
+        .appendCurrent("Current", GENERIC_VALUE).br()
+        .appendInfo("How many ticks after the delegate", "opening finishes the player is", "teleported back.").br()
+        .appendClick("Click to change")
+        .build();
+
     private static final IconLocale LOCALE_DELETE = LangEntry.iconBuilder("Editor.Button.Cinematic.Scene.Delete")
         .accentColor(RED)
         .name("Delete Scene")
@@ -156,6 +180,30 @@ public class CinematicOptionsMenu extends LinkedMenu<CratesPlugin, CinematicProv
             }).build()
         );
 
+        viewer.addItem(NightItem.fromType(Material.REPEATER)
+            .localized(LOCALE_START_DELAY)
+            .replacement(replacer -> replacer.replace(GENERIC_VALUE, () -> String.valueOf(scene.getStartDelay())))
+            .toMenuItem().setSlots(23).setHandler((viewer1, event) -> {
+                this.dialogs.show(player, CinematicDialogs.SCENE_START_DELAY, provider, flush);
+            }).build()
+        );
+
+        viewer.addItem(NightItem.fromType(Material.COMPARATOR)
+            .localized(LOCALE_OPENING_DELAY)
+            .replacement(replacer -> replacer.replace(GENERIC_VALUE, () -> String.valueOf(scene.getOpeningDelay())))
+            .toMenuItem().setSlots(24).setHandler((viewer1, event) -> {
+                this.dialogs.show(player, CinematicDialogs.SCENE_OPENING_DELAY, provider, flush);
+            }).build()
+        );
+
+        viewer.addItem(NightItem.fromType(Material.OBSERVER)
+            .localized(LOCALE_END_DELAY)
+            .replacement(replacer -> replacer.replace(GENERIC_VALUE, () -> String.valueOf(scene.getEndDelay())))
+            .toMenuItem().setSlots(25).setHandler((viewer1, event) -> {
+                this.dialogs.show(player, CinematicDialogs.SCENE_END_DELAY, provider, flush);
+            }).build()
+        );
+
         viewer.addItem(NightItem.fromType(Material.ARMOR_STAND)
             .localized(LOCALE_MODEL)
             .replacement(replacer -> replacer.replace(GENERIC_VALUE, () ->
@@ -170,6 +218,14 @@ public class CinematicOptionsMenu extends LinkedMenu<CratesPlugin, CinematicProv
             .replacement(replacer -> replacer.replace(GENERIC_VALUE, scene::getModelAnimation))
             .toMenuItem().setSlots(31).setHandler((viewer1, event) -> {
                 this.dialogs.show(player, CinematicDialogs.SCENE_MODEL_ANIMATION, provider, flush);
+            }).build()
+        );
+
+        viewer.addItem(NightItem.fromType(Material.COMPASS)
+            .localized(LOCALE_MODEL_YAW)
+            .replacement(replacer -> replacer.replace(GENERIC_VALUE, () -> String.valueOf(scene.getModelYaw())))
+            .toMenuItem().setSlots(33).setHandler((viewer1, event) -> {
+                this.dialogs.show(player, CinematicDialogs.SCENE_MODEL_YAW, provider, flush);
             }).build()
         );
 
